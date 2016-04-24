@@ -58,8 +58,10 @@ class EKF(object):
         #         http://wiki.scipy.org/NumPy_for_Matlab_Users
         # 1. Update self.xk and self.Pk using uk and self.Qk
         #        can use comp() from funtions.py
+
+        # Predict the mean of state vector
         self.xk = funcs.comp(self.xk,uk)
-        #print self.xk
+        
         Ak = np.array([[1,0, - math.sin(self.xk[2]) * uk[0] - math.cos(self.xk[2]) * uk[1]],[0,1,math.cos(self.xk[2]) * uk[0] - math.sin(self.xk[2]) * uk[1]],[0,0,1]])
         Wk = np.array([[math.cos(self.xk[2]), - math.sin(self.xk[2]),0],[math.sin(self.xk[2]),math.cos(self.xk[2]),0],[0,0,1]])
 
@@ -67,6 +69,8 @@ class EKF(object):
         P1 = np.dot(P1,np.transpose(Ak)) 
         P2 = np.dot(Wk,self.Qk)
         P2 = np.dot(P2,np.transpose(Wk))
+
+        # Predict the uncertainty
         self.Pk = P1 + P2
 
     # ==========================================================================
@@ -85,7 +89,6 @@ class EKF(object):
           Sk_list : list of 2x2 matrices (innovation uncertainty)
           Rk_list : list of 2x2 matrices (measurement uncertainty)
         """
-        # TODO: Program this function
         ################################################################
         # 1. Map lines (self.map) to polar robot frame: get_polar_line
         # 2. Sensed lines (lines) to polar robot frame: get_polar_line
@@ -100,8 +103,6 @@ class EKF(object):
         Sk_list = list()
         Rk_list = list()
 
-        #return Hk_list, Vk_list, Sk_list, Rk_list  # TODO: delete this line
-        
         # Get the lengths for map lines and measured lines
         map_length = np.sqrt(np.power(self.map[:,2] - self.map[:,0],2) + np.power(self.map[:,3] - self.map[:,1],2))
         lines_length = np.sqrt(np.power(lines[:,2] - lines[:,0],2) + np.power(lines[:,3] - lines[:,1],2))
@@ -121,13 +122,11 @@ class EKF(object):
             for j in range(0, self.map.shape[0]):
 
                 # Compute matrices
-                # h = funcs.get_polar_line(self.map[j],self.xk)
                 h = funcs.get_polar_line(self.map[j],[0,0,0]) # The map line is in the world frame now, only used to calculate the jacobian
                 H = self.jacobianH(h,self.xk)
                 h = funcs.get_polar_line(self.map[j],self.xk) # Map line is in the robot frame now, used to get innovation
                 v = z - h
                 S = np.dot(np.dot(H,self.Pk),np.transpose(H)) + self.Rk
-                #print S
                 # Mahalanobis distance
                 D = np.dot(np.dot(np.transpose(v), np.linalg.inv(S)), v)
 
@@ -151,7 +150,6 @@ class EKF(object):
 
             # Minimum distance below threshold
             if minD < chi_thres:
-            	#print type(minz), type(minh)
                 print("\t{} -> {}".format(minz, minh))
                 # Append results
                 associd.append([i, minj])
@@ -178,7 +176,6 @@ class EKF(object):
         """
         # Compose list of matrices as single matrices
         n = len(Hk_list)
-        #print n
         H = np.zeros((2*n, 3))
         v = np.zeros((2*n))
         S = np.zeros((2*n, 2*n))
@@ -188,21 +185,17 @@ class EKF(object):
             v[2*i:2*i+2] = Vk_list[i]
             S[2*i:2*i+2, 2*i:2*i+2] = Sk_list[i]
             R[2*i:2*i+2, 2*i:2*i+2] = Rk_list[i]
-        # print ("H size {}".format(H.shape))
-        # print ("v size {}".format(v.shape))
-        # print ("S size {}".format(S.shape))
-        # print ("R size {}".format(R.shape))
-        # print ("Pk size {}".format(self.Pk.shape))
         # There is data to update
         if not n > 0:
             return
 
 
         # Do the EKF update
-        K = np.dot(np.dot(self.Pk, np.transpose(H)), np.linalg.inv(S))
-        self.xk += np.dot(K,v)
+        K = np.dot(np.dot(self.Pk, np.transpose(H)), np.linalg.inv(S))# Key of Kalman filter
+        self.xk += np.dot(K,v)# Update the mean of state vector
         I = np.eye(3)
         u1 = I - np.dot(K,H)
+        # Update the uncertainty matrix
         self.Pk = np.dot(np.dot(u1, self.Pk),np.transpose(u1)) + np.dot(np.dot(K,R),np.transpose(K))
 
     # ==========================================================================
@@ -217,16 +210,15 @@ class EKF(object):
         # Complete the Jacobian H from the pre-lab
         # Jacobian H
         # lineworld is [rho_w, phi_w]
-        #print xk
-        #print lineworld
         eps = 0.000001
         rho_w = lineworld[0]
         phi_w = lineworld[1]
         Sxy = math.sqrt(xk[0]**2 + xk[1]**2)
         at = math.atan2(xk[1],xk[0]+eps)
-        #print at
+
         d1 = -(xk[0]/(Sxy + eps)) * math.cos(at - phi_w) - (xk[1]/(Sxy + eps)) * math.sin(at - phi_w)
         d2 = -(xk[1]/(Sxy + eps)) * math.cos(at - phi_w) + (xk[0]/(Sxy + eps)) * math.sin(at - phi_w)
+        # Jacobian matrix H 
         H = np.array([[d1,d2,0],[0,0,-1]])
 
         return H
